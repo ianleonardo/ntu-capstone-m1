@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+PERFORMANCE_ANALYSIS.md
+OPTIMIZATION_SUMMARY.md
+
+# Development files
+benchmark_comparison.py
+app_backup.py
+app copy.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Notebooks and tests
+*.ipynb
+.ipynb_checkpoints/
+uat/
+
+# Large unnecessary files (if any)
+*.log
+*.csv
+*.xz
+presentation/
