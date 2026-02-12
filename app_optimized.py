@@ -183,7 +183,6 @@ class DataProcessor:
         
         return df
 
-    @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Processing categories...")
     def explode_categories(df):
         """Separate function to explode categories - call only when needed"""
         df = df.copy()
@@ -217,7 +216,6 @@ class DataProcessor:
 # 3. CACHED AGGREGATION FUNCTIONS
 # ==========================================
 
-@st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Calculating executive metrics...")
 def calculate_executive_metrics(df):
     """Pre-compute all Executive Summary metrics - CACHED"""
     metrics = {
@@ -230,7 +228,6 @@ def calculate_executive_metrics(df):
     }
     return metrics
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_top_sectors_data(df, metric='num_vacancies', limit=10):
     """Get top sectors by metric - CACHED"""
     df_filtered = df[df['category'] != 'Others']
@@ -244,16 +241,14 @@ def get_top_sectors_data(df, metric='num_vacancies', limit=10):
     
     return data.reset_index(name='Value')
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def filter_by_sector(df, sector):
-    """Cache filtered dataframes by sector"""
+    """Filter dataframes by sector"""
     if sector == 'All':
         return df
     return df[df['category'] == sector].copy()
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_demand_velocity(df):
-    """Calculate demand velocity with bulk factor - CACHED"""
+    """Calculate demand velocity with bulk factor"""
     velocity_df = df[df['category'] != 'Others']
     top_10_sectors = velocity_df.groupby('category')['num_vacancies'].sum().nlargest(10).index
     velocity_df = velocity_df[velocity_df['category'].isin(top_10_sectors)]
@@ -272,7 +267,6 @@ def get_demand_velocity(df):
     
     return agg_df
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_bulk_hiring_data(df):
     """Calculate bulk hiring heatmap with bulk factor - CACHED"""
     bulk_df = df[df['category'] != 'Others']
@@ -295,7 +289,6 @@ def get_bulk_hiring_data(df):
     
     return bulk_factor_pivot
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_experience_metrics(df, sector='All'):
     """Calculate experience-related metrics - CACHED"""
     if sector != 'All':
@@ -311,7 +304,6 @@ def get_experience_metrics(df, sector='All'):
     
     return pay_scale, gate_df
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_education_metrics(df):
     """Calculate education gap metrics - CACHED"""
     metrics = df.groupby('category').agg({
