@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
 import json
+import re
 import os
 
 # ==========================================
@@ -182,7 +183,7 @@ class DataProcessor:
         
         return df
 
-    @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Processing data...")
+    @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Processing categories...")
     def explode_categories(df):
         """Separate function to explode categories - call only when needed"""
         df = df.copy()
@@ -262,7 +263,7 @@ def get_demand_velocity(df):
 def get_bulk_hiring_data(df):
     """Calculate bulk hiring heatmap with bulk factor - CACHED"""
     bulk_df = df[df['category'] != 'Others']
-    top_sectors_bulk = bulk_df.groupby('category')['num_vacancies'].sum().nlargest(10).index
+    top_sectors_bulk = bulk_df.groupby('category')['num_vacancies'].sum().nlargest(12).index
     bulk_filtered = bulk_df[bulk_df['category'].isin(top_sectors_bulk)]
     
     # Create pivot tables for both applications and vacancies
@@ -428,17 +429,6 @@ def main():
         st.subheader("🏭 Sectoral Demand & Momentum")
         st.markdown("Objective: Identify \"What\" to teach by tracking the velocity of industry needs.")
         
-        # 4. Bulk Hiring Map (cached)
-        st.markdown("#### 🗺️ Bulk Hiring Map")
-        st.caption("Competition intensity by sector and time. Darker = higher bulk factor (more applications per vacancy).")
-        
-        bulk_pivot = get_bulk_hiring_data(df)
-        fig_bulk = px.imshow(
-            bulk_pivot, aspect='auto', color_continuous_scale='YlOrRd',
-            labels=dict(x='Month', y='Sector', color='Bulk Factor')
-        )
-        st.plotly_chart(fig_bulk, use_container_width=True, key="bulk_hiring_map")
-
         # Demand Velocity (cached)
         st.markdown("#### 📈 Demand Velocity (Bulk Factor)")
         st.caption("Bulk Factor = Applications ÷ Vacancies. Higher values indicate stronger competition.")
@@ -453,6 +443,17 @@ def main():
             st.plotly_chart(fig_vel, use_container_width=True, key="demand_velocity_chart")
         else:
             st.warning("Not enough data points for time-series velocity.")
+
+        # 4. Bulk Hiring Map (cached)
+        st.markdown("#### 🗺️ Bulk Hiring Map")
+        st.caption("Competition intensity by sector and time. Darker = higher bulk factor (more applications per vacancy).")
+        
+        bulk_pivot = get_bulk_hiring_data(df)
+        fig_bulk = px.imshow(
+            bulk_pivot, aspect='auto', color_continuous_scale='YlOrRd',
+            labels=dict(x='Month', y='Sector', color='Bulk Factor')
+        )
+        st.plotly_chart(fig_bulk, use_container_width=True, key="bulk_hiring_map")
 
         # 5. Skills in High Demand (Lazy load skills data)
         st.markdown("#### High Demand Skills")
@@ -603,6 +604,22 @@ def main():
         # Use cached education metrics
         p2_metrics = get_education_metrics(df)
 
+        # Supply vs Demand Treemap (Keep Plotly for complex visualization)
+        st.markdown("#### Supply vs Demand")
+        st.caption("Treemap: Rectangle size = Vacancies (demand), Color = Applications (supply).")
+        supply_demand = p2_metrics[p2_metrics['category'] != 'Others'].copy()
+        supply_demand = supply_demand.sort_values('num_vacancies', ascending=False).head(20)
+        
+        fig_supply_demand = px.treemap(
+            supply_demand, path=[px.Constant("All Sectors"), 'category'],
+            values='num_vacancies', color='num_applications',
+            color_continuous_scale='RdYlGn_r',
+            labels={'num_vacancies': 'Vacancies (Size)', 'num_applications': 'Applications (Color)'},
+            title='Supply vs Demand Treemap',
+            hover_data=['num_vacancies', 'num_applications']
+        )
+        st.plotly_chart(fig_supply_demand, use_container_width=True, key="supply_demand_treemap")
+
         # Hidden Demand (Keep Plotly for scatter with quadrants) - BY JOB TITLE
         st.markdown("#### The \"Hidden Demand\"")
         st.caption("Quadrant analysis by job title: High vacancies + Low applications = Hidden opportunities.")
@@ -667,22 +684,6 @@ def main():
             fig_hidden.update_layout(height=600)
             st.plotly_chart(fig_hidden, use_container_width=True, key="hidden_demand_chart")
 
-
-        # Supply vs Demand Treemap (Keep Plotly for complex visualization)
-        st.markdown("#### Supply vs Demand")
-        st.caption("Treemap: Rectangle size = Vacancies (demand), Color = Applications (supply).")
-        supply_demand = p2_metrics[p2_metrics['category'] != 'Others'].copy()
-        supply_demand = supply_demand.sort_values('num_vacancies', ascending=False).head(20)
-        
-        fig_supply_demand = px.treemap(
-            supply_demand, path=[px.Constant("All Sectors"), 'category'],
-            values='num_vacancies', color='num_applications',
-            color_continuous_scale='RdYlGn_r',
-            labels={'num_vacancies': 'Vacancies (Size)', 'num_applications': 'Applications (Color)'},
-            title='Supply vs Demand Treemap',
-            hover_data=['num_vacancies', 'num_applications']
-        )
-        st.plotly_chart(fig_supply_demand, use_container_width=True, key="supply_demand_treemap")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,23 @@
+[server]
+port = 8080
+address = "0.0.0.0"
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#c0282d"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7f9"
+textColor = "#2c3e50"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[runner]
+fastReruns = true
