@@ -183,7 +183,6 @@ class DataProcessor:
         
         return df
 
-    @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Processing categories...")
     def explode_categories(df):
         """Separate function to explode categories - call only when needed"""
         df = df.copy()
@@ -192,19 +191,31 @@ class DataProcessor:
         df['category'] = df['parsed_categories'].apply(DataProcessor._extract_category)
         return df
 
-    @st.cache_data(ttl=Config.CACHE_TTL)
+    @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Loading skills data...")
     def load_skills_data():
-        """Lazy load skills data only when needed"""
-        if os.path.exists(Config.SKILL_FILE):
-            return pd.read_parquet(Config.SKILL_FILE)
-        return pd.DataFrame()
+        """Lazy load skills data only when needed - with error handling"""
+        try:
+            if os.path.exists(Config.SKILL_FILE):
+                # Check file size first
+                file_size_mb = os.path.getsize(Config.SKILL_FILE) / (1024 * 1024)
+                if file_size_mb > 20:  # Warn if > 20MB
+                    st.warning(f"⚠️ Skills file is large ({file_size_mb:.1f}MB). Loading may take time.")
+                
+                df = pd.read_parquet(Config.SKILL_FILE)
+                return df
+            else:
+                st.info("ℹ️ Skills data file not found. Skills chart will be unavailable.")
+                return pd.DataFrame()
+        except Exception as e:
+            st.error(f"❌ Error loading skills data: {str(e)}")
+            st.info("💡 Continuing without skills analysis.")
+            return pd.DataFrame()
 
 
 # ==========================================
 # 3. CACHED AGGREGATION FUNCTIONS
 # ==========================================
 
-@st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Calculating executive metrics...")
 def calculate_executive_metrics(df):
     """Pre-compute all Executive Summary metrics - CACHED"""
     metrics = {
@@ -217,7 +228,6 @@ def calculate_executive_metrics(df):
     }
     return metrics
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_top_sectors_data(df, metric='num_vacancies', limit=10):
     """Get top sectors by metric - CACHED"""
     df_filtered = df[df['category'] != 'Others']
@@ -231,16 +241,14 @@ def get_top_sectors_data(df, metric='num_vacancies', limit=10):
     
     return data.reset_index(name='Value')
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def filter_by_sector(df, sector):
-    """Cache filtered dataframes by sector"""
+    """Filter dataframes by sector"""
     if sector == 'All':
         return df
     return df[df['category'] == sector].copy()
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_demand_velocity(df):
-    """Calculate demand velocity with bulk factor - CACHED"""
+    """Calculate demand velocity with bulk factor"""
     velocity_df = df[df['category'] != 'Others']
     top_10_sectors = velocity_df.groupby('category')['num_vacancies'].sum().nlargest(10).index
     velocity_df = velocity_df[velocity_df['category'].isin(top_10_sectors)]
@@ -259,7 +267,6 @@ def get_demand_velocity(df):
     
     return agg_df
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_bulk_hiring_data(df):
     """Calculate bulk hiring heatmap with bulk factor - CACHED"""
     bulk_df = df[df['category'] != 'Others']
@@ -282,7 +289,6 @@ def get_bulk_hiring_data(df):
     
     return bulk_factor_pivot
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_experience_metrics(df, sector='All'):
     """Calculate experience-related metrics - CACHED"""
     if sector != 'All':
@@ -298,7 +304,6 @@ def get_experience_metrics(df, sector='All'):
     
     return pay_scale, gate_df
 
-@st.cache_data(ttl=Config.CACHE_TTL)
 def get_education_metrics(df):
     """Calculate education gap metrics - CACHED"""
     metrics = df.groupby('category').agg({
@@ -459,101 +464,113 @@ def main():
         st.markdown("#### High Demand Skills")
         st.caption("Top 10 skills by unique job postings over time.")
         
-        # Only load skills data when this tab is accessed
-        skills_df = DataProcessor.load_skills_data()
+        # Add toggle to enable/disable skills loading (useful for debugging/performance)
+        load_skills = st.checkbox("Load Skills Analysis", value=True, key="load_skills_toggle", 
+                                   help="Uncheck to skip loading 16MB skills dataset")
         
-        if not skills_df.empty:
-            skills_df['posting_date'] = pd.to_datetime(skills_df['posting_date'], errors='coerce')
-            skills_df = skills_df.dropna(subset=['posting_date'])
-            skills_df['year_month'] = skills_df['posting_date'].dt.to_period('M').astype(str)
-            
-            available_months = sorted(skills_df['year_month'].unique())
-            
-            # Create formatted month labels (e.g., "Nov 2023")
-            month_labels = {}
-            for month in available_months:
-                # Convert "2023-11" to "Nov 2023"
-                date_obj = pd.to_datetime(month)
-                month_labels[month] = date_obj.strftime('%b %Y')
-            
-            if len(available_months) > 0:
-                skills_sectors = ['All'] + sorted(skills_df['category'].dropna().unique().tolist())
-                col_skills_filter, col_skills_space = st.columns([1, 3])
-                with col_skills_filter:
-                    st.markdown("**Filter by Sector**")
-                with col_skills_space:
-                    selected_skills_sector = st.selectbox("", skills_sectors, key="skills_sector_filter", label_visibility="collapsed")
-                
-                skills_filtered = skills_df.copy()
-                if selected_skills_sector != 'All':
-                    skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
-                
-                frames = []
-                all_skills = set()
-                
-                for month in available_months:
-                    month_data = skills_filtered[skills_filtered['year_month'] == month]
-                    skill_counts = month_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
-                    skill_counts = skill_counts.sort_values('job_count', ascending=False).head(10)
-                    
-                    if not skill_counts.empty:
-                        all_skills.update(skill_counts['skill'].tolist())
-                        
-                        frames.append(go.Frame(
-                            data=[go.Bar(
-                                y=skill_counts['skill'],
-                                x=skill_counts['job_count'],
-                                orientation='h',
-                                marker=dict(color=skill_counts['job_count'], colorscale='Blues')
-                            )],
-                            name=month
-                        ))
-                
-                initial_month = available_months[0]
-                initial_month_label = month_labels[initial_month]
-                initial_data = skills_filtered[skills_filtered['year_month'] == initial_month]
-                initial_counts = initial_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
-                initial_counts = initial_counts.sort_values('job_count', ascending=False).head(10)
-                
-                if frames and not initial_counts.empty:
-                    chart_title = f'Top 10 Skills by Month: {initial_month_label}' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}'
-                    
-                    fig = go.Figure(
-                        data=[go.Bar(
-                            y=initial_counts['skill'],
-                            x=initial_counts['job_count'],
-                            orientation='h',
-                            marker=dict(color=initial_counts['job_count'], colorscale='Blues')
-                        )],
-                        frames=frames
-                    )
-                    
-                    fig.update_layout(
-                        title=chart_title,
-                        xaxis_title='Number of Unique Job Postings',
-                        yaxis_title='Skill',
-                        height=600,
-                        yaxis={'categoryorder': 'total ascending'},
-                        sliders=[{
-                            'active': 0,
-                            'steps': [
-                                {
-                                    'args': [[f.name], {'frame': {'duration': 300}, 'mode': 'immediate', 'transition': {'duration': 300}}],
-                                    'label': month_labels[f.name],
-                                    'method': 'animate'
-                                } for f in frames
-                            ],
-                            'transition': {'duration': 300}
-                        }]
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True, key="skills_demand_chart")
-                else:
-                    st.info(f"No skills data available for {selected_skills_sector}")
-            else:
-                st.info("No date information available in skills data.")
+        if not load_skills:
+            st.info("ℹ️ Skills analysis disabled. Enable checkbox above to load.")
         else:
-            st.info("Skills data not available.")
+            # Only load skills data when enabled
+            try:
+                with st.spinner("Loading skills data (16MB)... This may take 5-10 seconds..."):
+                    skills_df = DataProcessor.load_skills_data()
+            except Exception as e:
+                st.error(f"Failed to load skills data: {str(e)}")
+                skills_df = pd.DataFrame()
+            
+            if not skills_df.empty:
+                skills_df['posting_date'] = pd.to_datetime(skills_df['posting_date'], errors='coerce')
+                skills_df = skills_df.dropna(subset=['posting_date'])
+                skills_df['year_month'] = skills_df['posting_date'].dt.to_period('M').astype(str)
+                
+                available_months = sorted(skills_df['year_month'].unique())
+                
+                # Create formatted month labels (e.g., "Nov 2023")
+                month_labels = {}
+                for month in available_months:
+                    # Convert "2023-11" to "Nov 2023"
+                    date_obj = pd.to_datetime(month)
+                    month_labels[month] = date_obj.strftime('%b %Y')
+                
+                if len(available_months) > 0:
+                    skills_sectors = ['All'] + sorted(skills_df['category'].dropna().unique().tolist())
+                    col_skills_filter, col_skills_space = st.columns([1, 3])
+                    with col_skills_filter:
+                        st.markdown("**Filter by Sector**")
+                    with col_skills_space:
+                        selected_skills_sector = st.selectbox("", skills_sectors, key="skills_sector_filter", label_visibility="collapsed")
+                    
+                    skills_filtered = skills_df.copy()
+                    if selected_skills_sector != 'All':
+                        skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
+                    
+                    frames = []
+                    all_skills = set()
+                    
+                    for month in available_months:
+                        month_data = skills_filtered[skills_filtered['year_month'] == month]
+                        skill_counts = month_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
+                        skill_counts = skill_counts.sort_values('job_count', ascending=False).head(10)
+                        
+                        if not skill_counts.empty:
+                            all_skills.update(skill_counts['skill'].tolist())
+                            
+                            frames.append(go.Frame(
+                                data=[go.Bar(
+                                    y=skill_counts['skill'],
+                                    x=skill_counts['job_count'],
+                                    orientation='h',
+                                    marker=dict(color=skill_counts['job_count'], colorscale='Blues')
+                                )],
+                                name=month
+                            ))
+                    
+                    initial_month = available_months[0]
+                    initial_month_label = month_labels[initial_month]
+                    initial_data = skills_filtered[skills_filtered['year_month'] == initial_month]
+                    initial_counts = initial_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
+                    initial_counts = initial_counts.sort_values('job_count', ascending=False).head(10)
+                    
+                    if frames and not initial_counts.empty:
+                        chart_title = f'Top 10 Skills by Month: {initial_month_label}' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}'
+                        
+                        fig = go.Figure(
+                            data=[go.Bar(
+                                y=initial_counts['skill'],
+                                x=initial_counts['job_count'],
+                                orientation='h',
+                                marker=dict(color=initial_counts['job_count'], colorscale='Blues')
+                            )],
+                            frames=frames
+                        )
+                        
+                        fig.update_layout(
+                            title=chart_title,
+                            xaxis_title='Number of Unique Job Postings',
+                            yaxis_title='Skill',
+                            height=600,
+                            yaxis={'categoryorder': 'total ascending'},
+                            sliders=[{
+                                'active': 0,
+                                'steps': [
+                                    {
+                                        'args': [[f.name], {'frame': {'duration': 300}, 'mode': 'immediate', 'transition': {'duration': 300}}],
+                                        'label': month_labels[f.name],
+                                        'method': 'animate'
+                                    } for f in frames
+                                ],
+                                'transition': {'duration': 300}
+                            }]
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True, key="skills_demand_chart")
+                    else:
+                        st.info(f"No skills data available for {selected_skills_sector}")
+                else:
+                    st.info("No date information available in skills data.")
+            else:
+                st.info("Skills data file not found or empty.")
 
     # --- TAB 3: SKILL & EXPERIENCE ---
     with tab3:
