@@ -153,15 +153,6 @@
             font-size: 0.9em;
         }
 
-        .challenges-section {
-            grid-column: 1 / -1;
-            margin-top: 20px;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 5px solid var(--accent-gold);
-        }
-
         h3 { color: var(--ntu-blue); margin-top: 0; }
         ul { line-height: 1.6; }
     </style>
@@ -187,93 +178,105 @@
     <div class="detail-box" id="detail-box">
         
         <div id="step-1" class="content-section active">
-            <h3>Strategic Alignment & Problem Definition</h3>
-            <p><strong>Primary Objective:</strong> Empower institutional leadership to synchronize academic curricula with real-world workforce demand, pinpointing high-growth potential in emerging sectors. </p>
-            <p><strong>Target Audience:</strong> Curriculum designers, strategic program planners, and institutional leadership. </p>
-            <p><strong>Value Proposition:</strong> Reducing the "job–training mismatch" by providing high-fidelity visibility into structural employment demand and differentiating between static and emerging skill sets. </p>
+            <h3>Business Understanding</h3>
+            <p><strong>Objective:</strong> Align curriculum with workforce demand by identifying high-competition sectors and skill gaps.</p>
+            <p><strong>Target Users:</strong> Educators, career counselors, workforce planners.</p>
+            <p><strong>Value:</strong> Reduce job-training mismatch through competition-focused market intelligence.</p>
         </div>
 
         <div id="step-2" class="content-section">
-            <h3>Data Acquisition & Collection</h3>
-            <p>Gathering comprehensive market intelligence to serve as the project foundation: </p>
+            <h3>Data Acquisition</h3>
+            <p><strong>Source:</strong> Singapore job market data (Parquet format)</p>
             <ul>
-                <li><strong>Primary Dataset:</strong> SGJobData (CSV format). </li>
-                <li><strong>Context:</strong> Aggregated Singapore-specific job postings, including metadata on vacancies, application volume, and sectoral categories. </li>
+                <li>Job postings with vacancies, applications, views, salaries</li>
+                <li>Skills extracted from descriptions with temporal tracking</li>
+                <li>Sector categorization and experience requirements</li>
             </ul>
         </div>
 
         <div id="step-3" class="content-section">
-            <h3>Data Preparation & Engineering</h3>
-            <p>Refining raw data into a reliable analytical asset: </p>
+            <h3>Data Preparation</h3>
             <ul>
-                <li><strong>Data Cleaning:</strong> Elimination of empty rows and unused columns; cap average salary using Log-IQR;noise reduction in job titles using fuzzy matching. </li>
-                <li><strong>Data Enrichment:</strong> Integration of skills data to enable competency mapping. </li>
+                <li><strong>Cleaning:</strong> Remove nulls, standardize job titles (fuzzy matching), cap salaries (IQR)</li>
+                <li><strong>Engineering:</strong> Calculate bulk factor (apps÷vacancies), segment experience levels</li>
+                <li><strong>Optimization:</strong> Parquet format for fast I/O, cached aggregations</li>
             </ul>
         </div>
 
         <div id="step-4" class="content-section">
-            <h3>Exploratory Data Analysis (EDA)</h3>
-            <p>Uncovering latent market behaviors through pattern recognition: </p>
+            <h3>Exploratory Analysis</h3>
             <ul>
-                <li><strong>Trend Identification:</strong> Comparative analysis of job vacancies against application volume across diverse economic sectors. </li>
-                <li><strong>Sectoral Profiling:</strong> Identifying demand velocity and role-specific density. </li>
+                <li><strong>Competition Patterns:</strong> Apps/vacancies ratio reveals market saturation</li>
+                <li><strong>Temporal Trends:</strong> Bulk factor changes identify emerging opportunities</li>
+                <li><strong>Skill Demand:</strong> Top skills evolve monthly across sectors</li>
+                <li><strong>Hidden Gems:</strong> High-vacancy, low-competition roles for job seekers</li>
             </ul>
         </div>
 
         <div id="step-5" class="content-section">
-            <h3>Strategic Dashboard Development</h3>
-            <p>A multi-dimensional visualization suite focused on three strategic pillars: </p>
+            <h3>Dashboard - 4 Analytical Modules</h3>
             
             <table>
                 <thead>
                     <tr>
-                        <th>Pillar & Goal </th>
-                        <th>Metric & Visualization </th>
-                        <th>Strategic Action for Educators </th>
+                        <th>Module</th>
+                        <th>Key Visualizations</th>
+                        <th>Insights</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>1. Sectoral Demand</strong><br><small>Identify high-growth hotspots</small></td>
-                        <td>Bulk Hiring (Heatmap), Demand Velocity (Trendline), High Demand Skills (Bar Chart)</td>
-                        <td>Timing-aligned program launches, integrate specific skill tags into module learning outcomes.</td>
+                        <td><strong>Executive Summary</strong></td>
+                        <td>KPIs, Top 10 Sectors</td>
+                        <td>Market overview by vacancies/posts/views</td>
                     </tr>
                     <tr>
-                        <td><strong>2. Skill & Experience</strong><br><small>Align program difficulty</small></td>
-                        <td>Salary by Seniority (Histogram), Exp. vs. Compensation (Line Chart), Experience Gates (Histogram)</td>
-                        <td>Map current programs against the compensation curve, designate fresh-grad friendly roles as "Primary Targets".</td>
+                        <td><strong>Sectoral Demand</strong></td>
+                        <td>Bulk Factor trends, Competition heatmap, Skills timeline</td>
+                        <td>Track competition intensity by sector/time, identify trending skills</td>
                     </tr>
                     <tr>
-                        <td><strong>3. Opportunity & Educational Gap</strong><br><small>Identify "Blue Ocean" opportunities</small></td>
-                        <td>Suppy vs Demand (Treemap), Competition Index (Bar Chart), The "Hidden Demand" (Quadrant Analysis)</td>
-                        <td>Diversify curriculum in saturated field, incubate "Beta" courses for these future-proof roles before they go mainstream.</td>
+                        <td><strong>Skill & Experience</strong></td>
+                        <td>Pay scale, Experience gates</td>
+                        <td>Salary progression, entry barriers by experience level</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Opportunity Discovery</strong></td>
+                        <td>Supply vs Demand treemap, Hidden Demand quadrants (by job title)</td>
+                        <td>Low-competition roles, oversupplied markets</td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
         <div id="step-6" class="content-section">
-            <h3>Implementation</h3>
-            <p><em>Use Case: IT Education & Training Provider </em></p>
+            <h3>Implementation & Use Cases</h3>
+            
             <div class="pillar-card">
-                <strong>Pillar 1: Momentum</strong> - Identifying hyper-growth roles to justify program scaling. <br>
-				Key Finding: xxxx<br>
-				Key Takeaway: yyyy<br>
+                <strong>For Educators:</strong>
+                <ul style="margin: 5px 0;">
+                    <li>Launch programs in low-competition sectors before saturation</li>
+                    <li>Design curricula matching market experience requirements</li>
+                    <li>Update skill modules based on trending demand</li>
+                </ul>
             </div>
+            
             <div class="pillar-card">
-                <strong>Pillar 2: Skill & Experience</strong> - Mapping curriculum complexity against actual market entry barriers. <br>
-				Key Finding: xxxx<br>
-				Key Takeaway: yyyy<br>
+                <strong>For Career Counselors:</strong>
+                <ul style="margin: 5px 0;">
+                    <li>Guide students to hidden opportunity roles (green quadrant)</li>
+                    <li>Set realistic expectations for competitive markets</li>
+                    <li>Recommend skill development based on temporal trends</li>
+                </ul>
             </div>
+            
             <div class="pillar-card">
-                <strong>Pillar 3: Opportunity & Educational Gap</strong> - Launching unique programs in undersaturated but high-potential fields. <br>
-				Key Finding: xxxx<br>
-				Key Takeaway: yyyy<br>
-            </div>
-            <div class="pillar-card">
-                <strong>Strategic Actions: </strong><br>
-				- xx<br>
-				- yy<br>
+                <strong>For Workforce Planners:</strong>
+                <ul style="margin: 5px 0;">
+                    <li>Monitor bulk factor to predict talent supply/demand gaps</li>
+                    <li>Track sector momentum for strategic resource allocation</li>
+                    <li>Identify salary benchmarks by experience level</li>
+                </ul>
             </div>
         </div>
 
@@ -283,14 +286,6 @@
         <a href="https://ntu-m1-capstone.theluwak.com/" target="_blank" class="launch-btn">
             Launch Dashboard
         </a>
-    </div>
-
-    <div class="challenges-section">
-        <h4 style="margin:0 0 10px 0; color:var(--ntu-blue)">Challenges & Learnings </h4>
-        <ul style="margin:0; display:flex; gap: 40px; list-style-type: '✔ ';">
-            <li>Defining high-fidelity metrics </li>
-            <li>Accurate data interpretation for strategic decisioning </li>
-        </ul>
     </div>
 </div>
 
