@@ -666,7 +666,7 @@ def run_dashboard():
             
             # Define experience groups
             bins = [0, 2, 5, 10, float('inf')]
-            labels = ['0-2 yrs (Entry)', '>2-5 yrs (Mid-Level)', '5-10 yrs (Senior)', '10+ yrs (Expert)']
+            labels = ['0-2 yrs (Entry)', '>2-5 yrs (Mid-Level)', '>5-10 yrs (Senior)', '10+ yrs (Expert)']
             colors = ['#FFB6C1', '#87CEEB', '#90EE90', '#FFD700']
             
             # Ensure exp_group exists
