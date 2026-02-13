@@ -457,101 +457,94 @@ def main():
         )
         st.plotly_chart(fig_bulk, use_container_width=True, key="bulk_hiring_map")
 
-        # 5. Skills in High Demand (Lazy load skills data)
+        # 5. Skills in High Demand
         st.markdown("#### High Demand Skills")
         st.caption("Top 10 skills by unique job postings over time.")
         
-        # Add toggle to enable/disable skills loading (useful for debugging/performance)
-        load_skills = st.checkbox("Load Skills Analysis", value=True, key="load_skills_toggle", 
-                                   help="Uncheck to skip loading 16MB skills dataset")
+        # Load pre-aggregated skills data (optimized: 1.08MB, 14x faster)
+        try:
+            with st.spinner("Loading optimized skills data..."):
+                skills_df = DataProcessor.load_skills_data()
+        except Exception as e:
+            st.error(f"Failed to load skills data: {str(e)}")
+            skills_df = pd.DataFrame()
         
-        if not load_skills:
-            st.info("ℹ️ Skills analysis disabled. Enable checkbox above to load.")
-        else:
-            # Load pre-aggregated skills data (optimized: 1.08MB, 14x faster)
-            try:
-                with st.spinner("Loading optimized skills data..."):
-                    skills_df = DataProcessor.load_skills_data()
-            except Exception as e:
-                st.error(f"Failed to load skills data: {str(e)}")
-                skills_df = pd.DataFrame()
+        if not skills_df.empty:
+            # Data already contains: skill, category, month_year, job_count (pre-aggregated)
+            available_months = sorted(skills_df['month_year'].unique())
             
-            if not skills_df.empty:
-                # Data already contains: skill, category, month_year, job_count (pre-aggregated)
-                available_months = sorted(skills_df['month_year'].unique())
+            # Create formatted month labels (e.g., "Nov 2023")
+            month_labels = {}
+            for month in available_months:
+                # Convert "2022-10" to "Oct 2022"
+                date_obj = pd.to_datetime(month)
+                month_labels[month] = date_obj.strftime('%b %Y')
+            
+            if len(available_months) > 0:
+                st.markdown("### 📈 Skill Demand Timeline - Top 10 Most Popular Skills")
                 
-                # Create formatted month labels (e.g., "Nov 2023")
-                month_labels = {}
-                for month in available_months:
-                    # Convert "2022-10" to "Oct 2022"
-                    date_obj = pd.to_datetime(month)
-                    month_labels[month] = date_obj.strftime('%b %Y')
+                skills_sectors = ['All'] + sorted(skills_df['category'].dropna().unique().tolist())
+                col_skills_filter, col_skills_space = st.columns([1, 3])
+                with col_skills_filter:
+                    st.markdown("**Filter by Sector**")
+                with col_skills_space:
+                    selected_skills_sector = st.selectbox("", skills_sectors, key="skills_sector_filter", label_visibility="collapsed")
                 
-                if len(available_months) > 0:
-                    st.markdown("### 📈 Skill Demand Timeline - Top 10 Most Popular Skills")
+                # Filter by sector
+                skills_filtered = skills_df.copy()
+                if selected_skills_sector != 'All':
+                    skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
+                
+                # Find top 10 skills overall (sum of job_count across all months)
+                top_skills = skills_filtered.groupby('skill')['job_count'].sum().nlargest(10).index.tolist()
+                
+                if top_skills:
+                    # Filter timeline data for top 10 skills
+                    timeline_df = skills_filtered[skills_filtered['skill'].isin(top_skills)].copy()
                     
-                    skills_sectors = ['All'] + sorted(skills_df['category'].dropna().unique().tolist())
-                    col_skills_filter, col_skills_space = st.columns([1, 3])
-                    with col_skills_filter:
-                        st.markdown("**Filter by Sector**")
-                    with col_skills_space:
-                        selected_skills_sector = st.selectbox("", skills_sectors, key="skills_sector_filter", label_visibility="collapsed")
+                    # Group by skill and month (sum job_count across categories if needed)
+                    timeline_df = timeline_df.groupby(['skill', 'month_year'])['job_count'].sum().reset_index()
                     
-                    # Filter by sector
-                    skills_filtered = skills_df.copy()
-                    if selected_skills_sector != 'All':
-                        skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
+                    # Convert month to formatted labels
+                    timeline_df['month_label'] = timeline_df['month_year'].map(month_labels)
                     
-                    # Find top 10 skills overall (sum of job_count across all months)
-                    top_skills = skills_filtered.groupby('skill')['job_count'].sum().nlargest(10).index.tolist()
+                    # Create line chart
+                    fig = px.line(
+                        timeline_df,
+                        x='month_label',
+                        y='job_count',
+                        color='skill',
+                        markers=True,
+                        title=f'Skill Demand Timeline - Top 10 Most Popular Skills' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}',
+                        labels={
+                            'month_label': 'Month-Year Period',
+                            'job_count': 'Number of Unique Job Postings',
+                            'skill': 'Skill'
+                        }
+                    )
                     
-                    if top_skills:
-                        # Filter timeline data for top 10 skills
-                        timeline_df = skills_filtered[skills_filtered['skill'].isin(top_skills)].copy()
-                        
-                        # Group by skill and month (sum job_count across categories if needed)
-                        timeline_df = timeline_df.groupby(['skill', 'month_year'])['job_count'].sum().reset_index()
-                        
-                        # Convert month to formatted labels
-                        timeline_df['month_label'] = timeline_df['month_year'].map(month_labels)
-                        
-                        # Create line chart
-                        fig = px.line(
-                            timeline_df,
-                            x='month_label',
-                            y='job_count',
-                            color='skill',
-                            markers=True,
-                            title=f'Skill Demand Timeline - Top 10 Most Popular Skills' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}',
-                            labels={
-                                'month_label': 'Month-Year Period',
-                                'job_count': 'Number of Unique Job Postings',
-                                'skill': 'Skill'
-                            }
+                    fig.update_layout(
+                        height=600,
+                        hovermode='x unified',
+                        legend=dict(
+                            title='Skills',
+                            orientation='v',
+                            yanchor='top',
+                            y=1,
+                            xanchor='left',
+                            x=1.02
                         )
-                        
-                        fig.update_layout(
-                            height=600,
-                            hovermode='x unified',
-                            legend=dict(
-                                title='Skills',
-                                orientation='v',
-                                yanchor='top',
-                                y=1,
-                                xanchor='left',
-                                x=1.02
-                            )
-                        )
-                        
-                        fig.update_traces(line=dict(width=2.5))
-                        
-                        st.plotly_chart(fig, use_container_width=True, key="skills_demand_chart")
-                    else:
-                        st.info(f"No skills data available for {selected_skills_sector}")
+                    )
+                    
+                    fig.update_traces(line=dict(width=2.5))
+                    
+                    st.plotly_chart(fig, use_container_width=True, key="skills_demand_chart")
                 else:
-                    st.info("No date information available in skills data.")
+                    st.info(f"No skills data available for {selected_skills_sector}")
             else:
-                st.info("Skills data file not found or empty.")
+                st.info("No date information available in skills data.")
+        else:
+            st.info("Skills data file not found or empty.")
 
     # --- TAB 3: SKILL & EXPERIENCE ---
     with tab3:
