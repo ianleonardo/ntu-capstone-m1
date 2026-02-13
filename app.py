@@ -7,11 +7,13 @@ import altair as alt
 import json
 import re
 import os
+import streamlit.components.v1 as components 
 
 # ==========================================
 # 1. CONFIGURATION & STYLING
 # ==========================================
 st.set_page_config(page_title="SG Job Market Dashboard for Curriculum Design", layout="wide", page_icon="📊")
+
 
 # Custom CSS with FORCED COLORS for visibility and Formatting
 st.markdown("""
@@ -89,9 +91,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+    <style>
+        /* Remove top padding from the main block container */
+        .block-container {
+            padding-top: 1rem !important; /* Default is usually 5rem or 6rem */
+            padding-bottom: 0rem !important;
+        }
+        
+        /* Optional: Hide the top header bar (the colored line) if you want a cleaner look */
+        header {
+            visibility: hidden;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 class Config:
     DATA_FILE = 'data/cleaned-sgjobdata.parquet'
-    SKILL_FILE = 'data/skills_optimized.parquet'  # Optimized: 1.08MB (was 15.55MB)
+    SKILL_FILE = 'data/skills_optimized.parquet'  
     CACHE_TTL = 3600
 
 def _remove_outliers(df, col):
@@ -166,11 +183,11 @@ class DataProcessor:
         
         # Create experience segments
         def categorize_exp(years):
-            if years == 0: return '1. Fresh / Entry (0 yrs)'
-            elif years <= 2: return '2. Junior (1-2 yrs)'
-            elif years <= 5: return '3. Mid-Level (3-5 yrs)'
-            elif years <= 8: return '4. Senior (6-8 yrs)'
-            else: return '5. Lead / Expert (9+ yrs)'
+            if years == 0: return '0-2 yrs (Fresh/Entry)'
+            elif years <= 2: return '2-5 yrs (Junior)'
+            elif years <= 5: return '5-8 yrs (Mid-Level)'
+            elif years <= 8: return '8-9 yrs (Senior)'
+            else: return '> 9+ yrs (Lead/Expert)'
         
         df['exp_segment'] = df['min_exp'].apply(categorize_exp)
         
@@ -317,11 +334,62 @@ def get_education_metrics(df):
     )
     return metrics
 
+# ==========================================
+# 4. LANDING PAGE
+# ==========================================
+def show_landing_page():
+    # 1. CSS to make the button look like your original "NTU Red" style
+    st.markdown("""
+        <style>
+        div.stButton > button {
+            background-color: #c0282d;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            padding: 0.5rem 1rem;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            margin-bottom: 20px; /* Add space below button */
+        }
+        div.stButton > button:hover {
+            background-color: #002d5b; /* NTU Blue on hover */
+            color: white;
+            box-shadow: 0 6px 8px rgba(0,0,0,0.2);
+            border-color: #002d5b;
+        }
+        div.stButton > button:focus {
+            background-color: #c0282d;
+            color: white;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 2. Native Streamlit Button (Placed at the TOP)
+    # Using columns to center it nicely
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # Check if button is clicked
+        if st.button("🚀 Launch Dashboard ↗", use_container_width=True):
+            st.query_params["page"] = "dashboard"
+            st.rerun()
+
+    # 3. Render the HTML Report (Placed BELOW the button)
+    file_path = "static/capstone-report.html" 
+    
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        # Render the HTML iframe
+        components.html(html_content, height=800, scrolling=True)
+    else:
+        st.error(f"🚨 Report file not found at: {file_path}")
 
 # ==========================================
-# 4. MAIN APP
+# 5. MAIN DASHBOARD
 # ==========================================
-def main():
+def run_dashboard():
     # Load base data (without explosion)
     df_raw = DataProcessor.load_and_clean_data()
     
@@ -331,7 +399,7 @@ def main():
     
     # Verify Data Integrity
     if df.empty:
-        st.error("No valid data found after cleaning. Please check your CSV format.")
+        st.error("No valid data found after cleaning. Please check your data files.")
         st.stop()
 
     # Date Period
@@ -349,7 +417,7 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊 Executive Summary", 
         "🏭 Sectoral Demand & Momentum", 
-        "🛠️ Skill & Experience", 
+        "🛠️ Experience Level", 
         "🎓 Education Gap & Opportunity"
     ])
 
@@ -546,46 +614,92 @@ def main():
         else:
             st.info("Skills data file not found or empty.")
 
-    # --- TAB 3: SKILL & EXPERIENCE ---
+    # --- TAB 3: EXPERIENCE LEVEL---
     with tab3:
-        st.subheader("🛠️ Skill & Experience Analysis")
+        st.subheader("🛠️ Experience Analysis")
         st.markdown("Objective: Align the \"Level\" of training with market reality to ensure graduate ROI.")
         
         # Add sector filter at top
         exp_comp_sectors = ['All'] + sorted(df['category'].unique().tolist())
         selected_exp_sector = st.selectbox("Filter by Sector:", exp_comp_sectors, key="tab3_sector_filter")
         
-        # Get cached metrics
-        pay_scale, gate_df = get_experience_metrics(df, selected_exp_sector)
+        # Filter dataframe based on sector selection
+        df_exp = df.copy() if selected_exp_sector == 'All' else df[df['category'] == selected_exp_sector]
         
-        c3a, c3b = st.columns(2)
+        # New Charts: Experience Distribution and Salary Distribution
+        c3_new1, c3_new2 = st.columns(2)
         
-        with c3a:
-            st.markdown("#### Seniority Pay-Scale")
-            st.caption("Average salary by experience level")
-            pay_scale = pay_scale.sort_values('exp_segment')
+        with c3_new1:
+            st.markdown("#### Experience Level Distribution")
+            st.caption("Distribution of total vacancies by experience level")
             
-            # Use Altair for simpler, faster rendering
-            pay_chart = alt.Chart(pay_scale).mark_bar().encode(
-                x=alt.X('exp_segment:N', title='Experience Level', axis=alt.Axis(labelAngle=-45)),
-                y=alt.Y('avg_salary:Q', title='Avg Salary (SGD)'),
-                color=alt.Color('avg_salary:Q', scale=alt.Scale(scheme='blues'), legend=None),
-                tooltip=['exp_segment', alt.Tooltip('avg_salary:Q', format=',.0f')]
-            ).properties(height=400, title="Salary by Seniority")
-            st.altair_chart(pay_chart, use_container_width=True)
-        
-        with c3b:
-            st.markdown("#### The \"Experience Gate\"")
-            st.caption("Vacancies accessible at each tier")
-            gate_df = gate_df.sort_values('exp_segment')
+            # Calculate vacancy distribution by experience level
+            exp_dist = df_exp.groupby('exp_segment')['num_vacancies'].sum().reset_index()
+            exp_dist = exp_dist.sort_values('num_vacancies', ascending=False)
             
-            gate_chart = alt.Chart(gate_df).mark_bar().encode(
-                x=alt.X('exp_segment:N', title='Experience Level', axis=alt.Axis(labelAngle=-45)),
-                y=alt.Y('num_vacancies:Q', title='Vacancies'),
-                color=alt.Color('num_vacancies:Q', scale=alt.Scale(scheme='viridis'), legend=None),
-                tooltip=['exp_segment', alt.Tooltip('num_vacancies:Q', format=',.0f')]
-            ).properties(height=400, title="Market Access by Experience")
-            st.altair_chart(gate_chart, use_container_width=True)
+            # Find the biggest portion to explode
+            max_idx = exp_dist['num_vacancies'].idxmax()
+            explode = [0.1 if idx == max_idx else 0 for idx in exp_dist.index]
+            
+            # Create pie chart with distinct colors
+            distinct_colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE']
+            
+            fig_pie = go.Figure(data=[go.Pie(
+                labels=exp_dist['exp_segment'],
+                values=exp_dist['num_vacancies'],
+                pull=explode,
+                hole=0.3,
+                marker=dict(colors=distinct_colors),
+                textinfo='label+percent',
+                textposition='auto',
+                insidetextorientation='horizontal'
+            )])
+            fig_pie.update_layout(
+                title="Vacancy Distribution by Experience Level",
+                height=400,
+                showlegend=False
+            )
+            st.plotly_chart(fig_pie, use_container_width=True, key="exp_distribution_pie")
+        
+        with c3_new2:
+            st.markdown("#### Average Salary Distribution by Experience")
+            st.caption("Weighted salary ranges across experience levels")
+            
+            # Prepare data for box plot (weighted by vacancies)
+            salary_data = df_exp[df_exp['average_salary'] > 0].copy()
+            
+            # Create weighted box plot with distinct colors
+            fig_box = go.Figure()
+            
+            # Distinct colors for each experience level
+            box_colors = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22']
+            
+            exp_levels = sorted(salary_data['exp_segment'].unique())
+            for idx, exp_level in enumerate(exp_levels):
+                exp_data = salary_data[salary_data['exp_segment'] == exp_level]
+                
+                # Repeat salaries based on num_vacancies for weighting
+                weighted_salaries = []
+                for _, row in exp_data.iterrows():
+                    weighted_salaries.extend([row['average_salary']] * int(row['num_vacancies']))
+                
+                if weighted_salaries:
+                    fig_box.add_trace(go.Box(
+                        y=weighted_salaries,
+                        name=exp_level,
+                        boxmean='sd',
+                        marker_color=box_colors[idx % len(box_colors)],
+                        line=dict(width=2)
+                    ))
+            
+            fig_box.update_layout(
+                title="Salary Distribution by Experience Level (Weighted by Vacancies)",
+                yaxis_title="Salary (SGD)",
+                xaxis_title="Experience Level",
+                height=400,
+                showlegend=False
+            )
+            st.plotly_chart(fig_box, use_container_width=True, key="salary_box_plot")
 
     # --- TAB 4: EDUCATION GAP & OPPORTUNITY ---
     with tab4:
@@ -737,5 +851,25 @@ def main():
             st.plotly_chart(fig_hidden, use_container_width=True, key="hidden_demand_chart")
 
 
+# ==========================================
+# 5. NEW ENTRY POINT (ROUTER)
+# ==========================================
+def main_router():
+    # Check the URL query parameters
+    # If URL is localhost:8501/?page=dashboard -> Show Dashboard
+    # If URL is localhost:8501/ -> Show Report
+    
+    try:
+        query_params = st.query_params
+        # Handle different Streamlit versions (some use get, some dict access)
+        page = query_params.get("page", "report")
+    except:
+        page = "report"
+
+    if page == "dashboard":
+        run_dashboard()
+    else:
+        show_landing_page()
+
 if __name__ == "__main__":
-    main()
+    main_router()

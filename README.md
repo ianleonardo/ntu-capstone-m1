@@ -143,7 +143,7 @@ streamlit run app.py
 
 **Optimized version** (with Altair charts for better performance):
 ```bash
-streamlit run app_optimized.py
+streamlit run app.py
 ```
 
 The application will open in your default browser at `http://localhost:8501`
@@ -255,7 +255,7 @@ class Config:
 - **Altair**: Lightweight, declarative visualizations (simple charts)
 - **Plotly**: Interactive charts for complex visualizations
   - Heatmaps, treemaps, scatter plots with quadrants
-  - Animated time-series with slider controls
+  - time-series charts
 
 **Data Storage:**
 - **Parquet**: Columnar storage format for efficient I/O
