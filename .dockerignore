@@ -32,6 +32,7 @@ OPTIMIZATION_SUMMARY.md
 
 # Development files
 benchmark_comparison.py
+cat_skills_data_optimizer.py
 app_backup.py
 app copy.py
 
@@ -49,3 +50,6 @@ uat/
 *.csv
 *.xz
 presentation/
+
+# Old unoptimized skills data (use skills_optimized.parquet instead)
+data/cleaned-sgjobdata-category-withskills.parquet
