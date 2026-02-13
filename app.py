@@ -701,7 +701,7 @@ def run_dashboard():
 
     # --- TAB 4: EDUCATION GAP & OPPORTUNITY ---
     with tab4:
-        st.subheader("🎓 Educational Gap & Opportunity")
+        st.subheader("🎓 Opportunity")
         st.markdown("Objective: Identify \"Blue Ocean\" opportunities where job matching rates are highest.")
         
         # Use cached education metrics
