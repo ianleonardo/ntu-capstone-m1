@@ -468,25 +468,22 @@ def main():
         if not load_skills:
             st.info("ℹ️ Skills analysis disabled. Enable checkbox above to load.")
         else:
-            # Only load skills data when enabled
+            # Load pre-aggregated skills data (optimized: 1.08MB, 14x faster)
             try:
-                with st.spinner("Loading skills data (16MB)... This may take 5-10 seconds..."):
+                with st.spinner("Loading optimized skills data..."):
                     skills_df = DataProcessor.load_skills_data()
             except Exception as e:
                 st.error(f"Failed to load skills data: {str(e)}")
                 skills_df = pd.DataFrame()
             
             if not skills_df.empty:
-                skills_df['posting_date'] = pd.to_datetime(skills_df['posting_date'], errors='coerce')
-                skills_df = skills_df.dropna(subset=['posting_date'])
-                skills_df['year_month'] = skills_df['posting_date'].dt.to_period('M').astype(str)
-                
-                available_months = sorted(skills_df['year_month'].unique())
+                # Data already contains: skill, category, month_year, job_count (pre-aggregated)
+                available_months = sorted(skills_df['month_year'].unique())
                 
                 # Create formatted month labels (e.g., "Nov 2023")
                 month_labels = {}
                 for month in available_months:
-                    # Convert "2023-11" to "Nov 2023"
+                    # Convert "2022-10" to "Oct 2022"
                     date_obj = pd.to_datetime(month)
                     month_labels[month] = date_obj.strftime('%b %Y')
                 
@@ -500,27 +497,23 @@ def main():
                     with col_skills_space:
                         selected_skills_sector = st.selectbox("", skills_sectors, key="skills_sector_filter", label_visibility="collapsed")
                     
+                    # Filter by sector
                     skills_filtered = skills_df.copy()
                     if selected_skills_sector != 'All':
                         skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
                     
-                    # Find top 10 skills overall (across all months)
-                    top_skills = skills_filtered.groupby('skill')['job_id'].nunique().nlargest(10).index.tolist()
+                    # Find top 10 skills overall (sum of job_count across all months)
+                    top_skills = skills_filtered.groupby('skill')['job_count'].sum().nlargest(10).index.tolist()
                     
                     if top_skills:
-                        # Create timeline data for each top skill
-                        timeline_data = []
-                        for skill in top_skills:
-                            skill_data = skills_filtered[skills_filtered['skill'] == skill]
-                            monthly_counts = skill_data.groupby('year_month')['job_id'].nunique().reset_index()
-                            monthly_counts['skill'] = skill
-                            monthly_counts.columns = ['month', 'job_count', 'skill']
-                            timeline_data.append(monthly_counts)
+                        # Filter timeline data for top 10 skills
+                        timeline_df = skills_filtered[skills_filtered['skill'].isin(top_skills)].copy()
                         
-                        timeline_df = pd.concat(timeline_data, ignore_index=True)
+                        # Group by skill and month (sum job_count across categories if needed)
+                        timeline_df = timeline_df.groupby(['skill', 'month_year'])['job_count'].sum().reset_index()
                         
                         # Convert month to formatted labels
-                        timeline_df['month_label'] = timeline_df['month'].apply(lambda x: month_labels.get(x, x))
+                        timeline_df['month_label'] = timeline_df['month_year'].map(month_labels)
                         
                         # Create line chart
                         fig = px.line(
