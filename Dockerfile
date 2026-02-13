@@ -16,4 +16,4 @@ RUN pip install -r requirements.txt
 EXPOSE 8080
 
 # Run the service on container startup.
-CMD ["streamlit", "run", "app_optimized.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.maxUploadSize=200"]
+CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--server.maxUploadSize=200"]

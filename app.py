@@ -611,30 +611,91 @@ def main():
         )
         st.plotly_chart(fig_supply_demand, use_container_width=True, key="supply_demand_treemap")
 
-        # Hidden Demand (Keep Plotly for scatter with quadrants) - BY JOB TITLE
+        # Hidden Demand Quadrant Analysis with Analysis Type Selection
         st.markdown("#### The \"Hidden Demand\"")
-        st.caption("Quadrant analysis by job title: High vacancies + Low applications = Hidden opportunities.")
+        st.caption("Quadrant analysis: High vacancies + Low applications = Hidden opportunities.")
         
-        # Create metrics by job title instead of category
-        title_metrics = df.groupby('jobtitle_cleaned').agg({
-            'num_vacancies': 'sum',
-            'num_applications': 'sum',
-            'min_exp': 'mean',
-            'job_id': 'count'
-        }).reset_index()
-        
-        title_metrics['opp_score'] = title_metrics['num_vacancies'] / (title_metrics['min_exp'] + 1)
-        title_metrics['comp_index'] = title_metrics.apply(
-            lambda x: x['num_applications'] / x['num_vacancies'] if x['num_vacancies'] > 0 else 0,
-            axis=1
+        # Single dropdown to select analysis type
+        analysis_type = st.selectbox(
+            "Analyze By:",
+            ["Industry", "Job Title", "Skills"],
+            key="hidden_demand_analysis_type",
+            help="Choose the dimension for quadrant analysis"
         )
         
-        hidden_demand = title_metrics.copy()
+        # Create metrics based on selected analysis type
+        if analysis_type == "Industry":
+            # Group by category (industry)
+            metrics = df.groupby('category').agg({
+                'num_vacancies': 'sum',
+                'num_applications': 'sum',
+                'min_exp': 'mean',
+                'job_id': 'count'
+            }).reset_index()
+            metrics.rename(columns={'category': 'name'}, inplace=True)
+            chart_title = 'Hidden Demand Quadrant Analysis by Industry'
+            hover_label = 'Industry'
+            
+        elif analysis_type == "Job Title":
+            # Group by job title
+            metrics = df.groupby('jobtitle_cleaned').agg({
+                'num_vacancies': 'sum',
+                'num_applications': 'sum',
+                'min_exp': 'mean',
+                'job_id': 'count'
+            }).reset_index()
+            metrics.rename(columns={'jobtitle_cleaned': 'name'}, inplace=True)
+            chart_title = 'Hidden Demand Quadrant Analysis by Job Title'
+            hover_label = 'Job Title'
+            
+        else:  # Skills
+            # Load skills data and group by skill
+            skills_file_full = 'data/cleaned-sgjobdata-category-withskills.parquet'
+            if os.path.exists(skills_file_full):
+                try:
+                    with st.spinner("Loading skills data for analysis..."):
+                        skills_df = pd.read_parquet(skills_file_full)
+                        
+                        # Merge with main dataframe to get vacancies and applications
+                        skills_with_data = skills_df.merge(
+                            df[['job_id', 'num_vacancies', 'num_applications', 'min_exp']], 
+                            on='job_id', 
+                            how='left'
+                        )
+                        
+                        # Group by skill
+                        metrics = skills_with_data.groupby('skill').agg({
+                            'num_vacancies': 'sum',
+                            'num_applications': 'sum',
+                            'min_exp': 'mean',
+                            'job_id': 'count'
+                        }).reset_index()
+                        metrics.rename(columns={'skill': 'name'}, inplace=True)
+                        
+                    chart_title = 'Hidden Demand Quadrant Analysis by Skills'
+                    hover_label = 'Skill'
+                except Exception as e:
+                    st.error(f"Failed to load skills data: {str(e)}")
+                    metrics = pd.DataFrame()
+            else:
+                st.warning("⚠️ Skills analysis requires full skills dataset")
+                metrics = pd.DataFrame()
+        
+        # Calculate opportunity score and competition index
+        if not metrics.empty:
+            metrics['opp_score'] = metrics['num_vacancies'] / (metrics['min_exp'] + 1)
+            metrics['comp_index'] = metrics.apply(
+                lambda x: x['num_applications'] / x['num_vacancies'] if x['num_vacancies'] > 0 else 0,
+                axis=1
+            )
+        
+        hidden_demand = metrics.copy()
         
         if len(hidden_demand) > 0:
-            # Sample to show top 50 job titles by vacancy count
-            if len(hidden_demand) > 50:
-                hidden_demand = hidden_demand.nlargest(50, 'num_vacancies')
+            # Sample to show top 50 items by vacancy count
+            sample_size = 50 if analysis_type in ["Job Title", "Skills"] else len(hidden_demand)
+            if len(hidden_demand) > sample_size:
+                hidden_demand = hidden_demand.nlargest(sample_size, 'num_vacancies')
             
             median_vac = hidden_demand['num_vacancies'].median()
             median_app = hidden_demand['num_applications'].median()
@@ -650,16 +711,16 @@ def main():
                     return 'Oversupplied'
             
             hidden_demand['quadrant'] = hidden_demand.apply(assign_quadrant, axis=1)
-            hidden_demand['title_text'] = hidden_demand.apply(
-                lambda row: '' if row['quadrant'] == 'Niche Market' else row['jobtitle_cleaned'], axis=1
+            hidden_demand['display_text'] = hidden_demand.apply(
+                lambda row: '' if row['quadrant'] == 'Niche Market' else row['name'], axis=1
             )
             
             fig_hidden = px.scatter(
                 hidden_demand, x='num_vacancies', y='num_applications',
                 size='num_vacancies', color='quadrant',
-                hover_name='jobtitle_cleaned', text='title_text',
-                labels={'num_vacancies': 'Vacancies', 'num_applications': 'Applications'},
-                title='Hidden Demand Quadrant Analysis (by Job Title)',
+                hover_name='name', text='display_text',
+                labels={'num_vacancies': 'Vacancies', 'num_applications': 'Applications', 'name': hover_label},
+                title=chart_title,
                 color_discrete_map={
                     'Hidden Opportunity': '#28B463',
                     'Competitive Market': '#E67E22',
