@@ -366,14 +366,12 @@ def show_landing_page():
         </style>
     """, unsafe_allow_html=True)
 
-    # 2. Native Streamlit Button (Placed at the TOP)
+    # 2. Launch Dashboard Button (Opens in new window)
     # Using columns to center it nicely
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Check if button is clicked
-        if st.button("🚀 Launch Dashboard ↗", use_container_width=True):
-            st.query_params["page"] = "dashboard"
-            st.rerun()
+        # Use link_button to open dashboard in new tab
+        st.link_button("🚀 Launch Dashboard ↗", "/?page=dashboard", use_container_width=True)
 
     # 3. Render the HTML Report (Placed BELOW the button)
     file_path = "static/capstone-report.html" 
