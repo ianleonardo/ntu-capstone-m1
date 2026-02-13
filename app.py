@@ -416,7 +416,7 @@ def run_dashboard():
         "📊 Executive Summary", 
         "🏭 Sectoral Demand & Momentum", 
         "🛠️ Experience Level", 
-        "🎓 Education Gap & Opportunity"
+        "🎓 Opportunity"
     ])
 
     # --- TAB 1: EXECUTIVE ---
