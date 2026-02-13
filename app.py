@@ -676,7 +676,7 @@ def run_dashboard():
             # Prepare data: expand rows by capping at max 5 vacancies per row
             # This creates a weighted representation
             df_weighted = df_exp.copy()
-            df_weighted['weight_cap'] = df_weighted['num_vacancies'].clip(upper=5)
+            df_weighted['weight_cap'] = df_weighted['num_vacancies'].clip(upper=2)
             
             # Create weighted dataframe by repeating rows
             df_expanded = df_weighted.loc[df_weighted.index.repeat(df_weighted['weight_cap'].astype(int))].reset_index(drop=True)
