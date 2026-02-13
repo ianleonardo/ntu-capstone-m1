@@ -4,6 +4,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import altair as alt
+import matplotlib.pyplot as plt
+import seaborn as sns
 import json
 import re
 import os
@@ -184,9 +186,9 @@ class DataProcessor:
         # Create experience segments
         def categorize_exp(years):
             if years <= 2: return '0-2 yrs (Entry/Junior)'
-            elif years <= 5: return '2-5 yrs (Mid-Level)'
-            elif years <= 10: return '5-10 yrs (Senior)'
-            else: return '> 10+ yrs (Expert)'
+            elif years <= 5: return '>2-5 yrs (Mid-Level)'
+            elif years <= 10: return '>5-10 yrs (Senior)'
+            else: return '10+ yrs (Expert)'
         
         df['exp_segment'] = df['min_exp'].apply(categorize_exp)
         
@@ -662,41 +664,49 @@ def run_dashboard():
             st.markdown("#### Average Salary Distribution by Experience")
             st.caption("Weighted salary ranges across experience levels")
             
-            # Prepare data for box plot (weighted by vacancies)
-            salary_data = df_exp[df_exp['average_salary'] > 0].copy()
+            # Define experience groups
+            bins = [0, 2, 5, 10, float('inf')]
+            labels = ['0-2 yrs (Entry)', '>2-5 yrs (Mid-Level)', '5-10 yrs (Senior)', '10+ yrs (Expert)']
+            colors = ['#FFB6C1', '#87CEEB', '#90EE90', '#FFD700']
             
-            # Create weighted box plot with distinct colors
-            fig_box = go.Figure()
+            # Ensure exp_group exists
+            if 'exp_group' not in df_exp.columns:
+                df_exp['exp_group'] = pd.cut(df_exp['min_exp'], bins=bins, labels=labels, right=False)
             
-            # Distinct colors for each experience level
-            box_colors = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22']
+            # Prepare data: expand rows by capping at max 5 vacancies per row
+            # This creates a weighted representation
+            df_weighted = df_exp.copy()
+            df_weighted['weight_cap'] = df_weighted['num_vacancies'].clip(upper=5)
             
-            exp_levels = sorted(salary_data['exp_segment'].unique())
-            for idx, exp_level in enumerate(exp_levels):
-                exp_data = salary_data[salary_data['exp_segment'] == exp_level]
-                
-                # Repeat salaries based on num_vacancies for weighting
-                weighted_salaries = []
-                for _, row in exp_data.iterrows():
-                    weighted_salaries.extend([row['average_salary']] * int(row['num_vacancies']))
-                
-                if weighted_salaries:
-                    fig_box.add_trace(go.Box(
-                        y=weighted_salaries,
-                        name=exp_level,
-                        boxmean='sd',
-                        marker_color=box_colors[idx % len(box_colors)],
-                        line=dict(width=2)
-                    ))
+            # Create weighted dataframe by repeating rows
+            df_expanded = df_weighted.loc[df_weighted.index.repeat(df_weighted['weight_cap'].astype(int))].reset_index(drop=True)
             
-            fig_box.update_layout(
-                title="Salary Distribution by Experience Level (Weighted by Vacancies)",
-                yaxis_title="Salary (SGD)",
-                xaxis_title="Experience Level",
-                height=400,
-                showlegend=False
-            )
-            st.plotly_chart(fig_box, use_container_width=True, key="salary_box_plot")
+            # Drop rows with missing values
+            plot_df = df_expanded.dropna(subset=['exp_group', 'average_salary']).copy()
+            
+            # Compute total vacancies per group (from original, unweighted data)
+            vacancy_totals = df_exp.groupby('exp_group')['num_vacancies'].sum()
+            
+            # Create boxplot with seaborn (same as Jupyter notebook)
+            fig, ax = plt.subplots(figsize=(12, 6))
+            sns.boxplot(data=plot_df, x='exp_group', y='average_salary', palette=colors, linewidth=1, ax=ax)
+            
+            # Create x-tick labels with total vacancies
+            xticklabels = [f"{grp}\n(Total vacancies: {int(vacancy_totals.get(grp, 0))})" for grp in labels]
+            ax.set_xticklabels(xticklabels)
+            
+            # Labels, title and grid
+            ax.set_xlabel('Experience (Years)', fontsize=12)
+            ax.set_ylabel('Average Salary (SGD)', fontsize=12)
+            ax.set_title('Average Salary Distribution by Experience Group (weighted by num_vacancies)', fontsize=14, fontweight='bold')
+            plt.grid(True, axis='y', which='major', linestyle='--', alpha=0.6)
+            plt.minorticks_on()
+            plt.grid(True, which='minor', axis='y', linestyle=':', alpha=0.3)
+            plt.tight_layout()
+            
+            # Display in Streamlit
+            st.pyplot(fig)
+            plt.close()
 
     # --- TAB 4: EDUCATION GAP & OPPORTUNITY ---
     with tab4:
