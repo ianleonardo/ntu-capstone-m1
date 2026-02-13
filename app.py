@@ -177,17 +177,16 @@ class DataProcessor:
         df['min_exp'] = df['min_exp'].fillna(0)
         
         # Outlier handling for min_exp
-        if 'min_exp' in df.columns and not df.empty:
-            df['min_exp'] = _remove_outliers(df, 'min_exp')
-        df['min_exp'] = np.clip(df['min_exp'], 0, 15)
+        #if 'min_exp' in df.columns and not df.empty:
+        #    df['min_exp'] = _remove_outliers(df, 'min_exp')
+        #df['min_exp'] = np.clip(df['min_exp'], 0, 15)
         
         # Create experience segments
         def categorize_exp(years):
-            if years == 0: return '0-2 yrs (Fresh/Entry)'
-            elif years <= 2: return '2-5 yrs (Junior)'
-            elif years <= 5: return '5-8 yrs (Mid-Level)'
-            elif years <= 8: return '8-9 yrs (Senior)'
-            else: return '> 9+ yrs (Lead/Expert)'
+            if years <= 2: return '0-2 yrs (Entry/Junior)'
+            elif years <= 5: return '2-5 yrs (Mid-Level)'
+            elif years <= 10: return '5-10 yrs (Senior)'
+            else: return '> 10+ yrs (Expert)'
         
         df['exp_segment'] = df['min_exp'].apply(categorize_exp)
         
