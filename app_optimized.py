@@ -91,7 +91,7 @@ st.markdown("""
 
 class Config:
     DATA_FILE = 'data/cleaned-sgjobdata.parquet'
-    SKILL_FILE = 'data/cleaned-sgjobdata-category-withskills.parquet'
+    SKILL_FILE = 'data/skills_optimized.parquet'  # Optimized: 1.08MB (was 15.55MB)
     CACHE_TTL = 3600
 
 def _remove_outliers(df, col):
@@ -193,15 +193,12 @@ class DataProcessor:
 
     @st.cache_data(ttl=Config.CACHE_TTL, show_spinner="Loading skills data...")
     def load_skills_data():
-        """Lazy load skills data only when needed - with error handling"""
+        """Load pre-aggregated skills data (optimized for fast loading)"""
         try:
             if os.path.exists(Config.SKILL_FILE):
-                # Check file size first
-                file_size_mb = os.path.getsize(Config.SKILL_FILE) / (1024 * 1024)
-                if file_size_mb > 20:  # Warn if > 20MB
-                    st.warning(f"⚠️ Skills file is large ({file_size_mb:.1f}MB). Loading may take time.")
-                
+                # Load pre-aggregated data (much smaller and faster)
                 df = pd.read_parquet(Config.SKILL_FILE)
+                # Data already contains: skill, category, month_year, job_count
                 return df
             else:
                 st.info("ℹ️ Skills data file not found. Skills chart will be unavailable.")
@@ -494,6 +491,8 @@ def main():
                     month_labels[month] = date_obj.strftime('%b %Y')
                 
                 if len(available_months) > 0:
+                    st.markdown("### 📈 Skill Demand Timeline - Top 10 Most Popular Skills")
+                    
                     skills_sectors = ['All'] + sorted(skills_df['category'].dropna().unique().tolist())
                     col_skills_filter, col_skills_space = st.columns([1, 3])
                     with col_skills_filter:
@@ -505,64 +504,53 @@ def main():
                     if selected_skills_sector != 'All':
                         skills_filtered = skills_filtered[skills_filtered['category'] == selected_skills_sector]
                     
-                    frames = []
-                    all_skills = set()
+                    # Find top 10 skills overall (across all months)
+                    top_skills = skills_filtered.groupby('skill')['job_id'].nunique().nlargest(10).index.tolist()
                     
-                    for month in available_months:
-                        month_data = skills_filtered[skills_filtered['year_month'] == month]
-                        skill_counts = month_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
-                        skill_counts = skill_counts.sort_values('job_count', ascending=False).head(10)
+                    if top_skills:
+                        # Create timeline data for each top skill
+                        timeline_data = []
+                        for skill in top_skills:
+                            skill_data = skills_filtered[skills_filtered['skill'] == skill]
+                            monthly_counts = skill_data.groupby('year_month')['job_id'].nunique().reset_index()
+                            monthly_counts['skill'] = skill
+                            monthly_counts.columns = ['month', 'job_count', 'skill']
+                            timeline_data.append(monthly_counts)
                         
-                        if not skill_counts.empty:
-                            all_skills.update(skill_counts['skill'].tolist())
-                            
-                            frames.append(go.Frame(
-                                data=[go.Bar(
-                                    y=skill_counts['skill'],
-                                    x=skill_counts['job_count'],
-                                    orientation='h',
-                                    marker=dict(color=skill_counts['job_count'], colorscale='Blues')
-                                )],
-                                name=month
-                            ))
-                    
-                    initial_month = available_months[0]
-                    initial_month_label = month_labels[initial_month]
-                    initial_data = skills_filtered[skills_filtered['year_month'] == initial_month]
-                    initial_counts = initial_data.groupby('skill')['job_id'].nunique().reset_index(name='job_count')
-                    initial_counts = initial_counts.sort_values('job_count', ascending=False).head(10)
-                    
-                    if frames and not initial_counts.empty:
-                        chart_title = f'Top 10 Skills by Month: {initial_month_label}' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}'
+                        timeline_df = pd.concat(timeline_data, ignore_index=True)
                         
-                        fig = go.Figure(
-                            data=[go.Bar(
-                                y=initial_counts['skill'],
-                                x=initial_counts['job_count'],
-                                orientation='h',
-                                marker=dict(color=initial_counts['job_count'], colorscale='Blues')
-                            )],
-                            frames=frames
+                        # Convert month to formatted labels
+                        timeline_df['month_label'] = timeline_df['month'].apply(lambda x: month_labels.get(x, x))
+                        
+                        # Create line chart
+                        fig = px.line(
+                            timeline_df,
+                            x='month_label',
+                            y='job_count',
+                            color='skill',
+                            markers=True,
+                            title=f'Skill Demand Timeline - Top 10 Most Popular Skills' if selected_skills_sector == 'All' else f'Top 10 Skills in {selected_skills_sector}',
+                            labels={
+                                'month_label': 'Month-Year Period',
+                                'job_count': 'Number of Unique Job Postings',
+                                'skill': 'Skill'
+                            }
                         )
                         
                         fig.update_layout(
-                            title=chart_title,
-                            xaxis_title='Number of Unique Job Postings',
-                            yaxis_title='Skill',
                             height=600,
-                            yaxis={'categoryorder': 'total ascending'},
-                            sliders=[{
-                                'active': 0,
-                                'steps': [
-                                    {
-                                        'args': [[f.name], {'frame': {'duration': 300}, 'mode': 'immediate', 'transition': {'duration': 300}}],
-                                        'label': month_labels[f.name],
-                                        'method': 'animate'
-                                    } for f in frames
-                                ],
-                                'transition': {'duration': 300}
-                            }]
+                            hovermode='x unified',
+                            legend=dict(
+                                title='Skills',
+                                orientation='v',
+                                yanchor='top',
+                                y=1,
+                                xanchor='left',
+                                x=1.02
+                            )
                         )
+                        
+                        fig.update_traces(line=dict(width=2.5))
                         
                         st.plotly_chart(fig, use_container_width=True, key="skills_demand_chart")
                     else:
