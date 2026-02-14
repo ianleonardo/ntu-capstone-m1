@@ -662,7 +662,7 @@ def run_dashboard():
         
         with c3_new2:
             st.markdown("#### Average Salary Distribution by Experience")
-            st.caption("Weighted salary ranges across experience levels")
+            st.caption("Salary ranges across experience levels")
             
             # Define experience groups
             bins = [0, 2, 5, 10, float('inf')]
@@ -673,21 +673,13 @@ def run_dashboard():
             if 'exp_group' not in df_exp.columns:
                 df_exp['exp_group'] = pd.cut(df_exp['min_exp'], bins=bins, labels=labels, right=False)
             
-            # Prepare data: expand rows by capping at max 5 vacancies per row
-            # This creates a weighted representation
-            df_weighted = df_exp.copy()
-            df_weighted['weight_cap'] = df_weighted['num_vacancies'].clip(upper=2)
+            # Drop rows with missing values for normal boxplot
+            plot_df = df_exp.dropna(subset=['exp_group', 'average_salary']).copy()
             
-            # Create weighted dataframe by repeating rows
-            df_expanded = df_weighted.loc[df_weighted.index.repeat(df_weighted['weight_cap'].astype(int))].reset_index(drop=True)
+            # Compute total vacancies per group
+            vacancy_totals = plot_df.groupby('exp_group')['num_vacancies'].sum()
             
-            # Drop rows with missing values
-            plot_df = df_expanded.dropna(subset=['exp_group', 'average_salary']).copy()
-            
-            # Compute total vacancies per group (from original, unweighted data)
-            vacancy_totals = df_exp.groupby('exp_group')['num_vacancies'].sum()
-            
-            # Create boxplot with seaborn (same as Jupyter notebook)
+            # Create normal boxplot with seaborn
             fig, ax = plt.subplots(figsize=(12, 6))
             sns.boxplot(data=plot_df, x='exp_group', y='average_salary', palette=colors, linewidth=1, ax=ax)
             
@@ -698,7 +690,7 @@ def run_dashboard():
             # Labels, title and grid
             ax.set_xlabel('Experience (Years)', fontsize=12)
             ax.set_ylabel('Average Salary (SGD)', fontsize=12)
-            ax.set_title('Average Salary Distribution by Experience Group (weighted by num_vacancies)', fontsize=14, fontweight='bold')
+            ax.set_title('Average Salary Distribution by Experience Group', fontsize=14, fontweight='bold')
             plt.grid(True, axis='y', which='major', linestyle='--', alpha=0.6)
             plt.minorticks_on()
             plt.grid(True, which='minor', axis='y', linestyle=':', alpha=0.3)
