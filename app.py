@@ -673,11 +673,11 @@ def run_dashboard():
             if 'exp_group' not in df_exp.columns:
                 df_exp['exp_group'] = pd.cut(df_exp['min_exp'], bins=bins, labels=labels, right=False)
             
+            # Compute total vacancies per group (from original data before filtering)
+            vacancy_totals = df_exp.groupby('exp_group')['num_vacancies'].sum()
+            
             # Drop rows with missing values for normal boxplot
             plot_df = df_exp.dropna(subset=['exp_group', 'average_salary']).copy()
-            
-            # Compute total vacancies per group
-            vacancy_totals = plot_df.groupby('exp_group')['num_vacancies'].sum()
             
             # Create normal boxplot with seaborn
             fig, ax = plt.subplots(figsize=(12, 6))
@@ -767,17 +767,12 @@ def run_dashboard():
             if os.path.exists(skills_file_full):
                 try:
                     with st.spinner("Loading skills data for analysis..."):
-                        skills_df = pd.read_parquet(skills_file_full)
+                        # Load only necessary columns to reduce memory usage
+                        required_columns = ['job_id', 'skill', 'num_vacancies', 'num_applications', 'min_exp']
+                        skills_df = pd.read_parquet(skills_file_full, columns=required_columns)
                         
-                        # Merge with main dataframe to get vacancies and applications
-                        skills_with_data = skills_df.merge(
-                            df[['job_id', 'num_vacancies', 'num_applications', 'min_exp']], 
-                            on='job_id', 
-                            how='left'
-                        )
-                        
-                        # Group by skill
-                        metrics = skills_with_data.groupby('skill').agg({
+                        # Group by skill directly (no merge needed since we have all required columns)
+                        metrics = skills_df.groupby('skill').agg({
                             'num_vacancies': 'sum',
                             'num_applications': 'sum',
                             'min_exp': 'mean',
